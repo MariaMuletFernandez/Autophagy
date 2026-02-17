@@ -1,0 +1,101 @@
+############################################################
+# Principal Component Analysis (PCA)
+# Author: Maria Mulet Fernandez
+#
+# Description:
+# This script:
+# 1. Loads peptide expression data
+# 2. Applies log2 transformation
+# 3. Performs PCA using FactoMineR
+# 4. Visualizes PC1 vs PC2 with confidence ellipses
+#
+# Input:
+#   - CSV file with features as rows and samples as columns
+#
+# Output:
+#   - PCA scatter plot (PC1 vs PC2)
+############################################################
+
+
+############################
+# 1. Load Required Libraries
+############################
+
+library(FactoMineR)
+library(factoextra)
+library(ggplot2)
+library(dplyr)
+
+
+############################
+# 2. Load and Prepare Data
+############################
+
+# Load expression matrix
+raw_data <- read.csv(
+  "your_path/your_input_file.csv",
+  row.names = 1
+)
+
+# Log2 transformation (avoids skewness)
+log_data <- log2(raw_data + 1)
+
+# Transpose so rows = samples, columns = variables
+pca_input <- t(log_data)
+
+pca_input <- as.data.frame(pca_input)
+
+# Remove features with zero variance
+pca_input <- pca_input[, apply(pca_input, 2, var) != 0]
+
+
+############################
+# 3. Define Sample Groups
+############################
+
+# Adjust group sizes if needed
+group <- factor(rep(c("sEVs", "AD", "LEVs"),
+                    times = c(5, 4, 4)))
+
+metadata <- data.frame(
+  Sample = rownames(pca_input),
+  Group  = group
+)
+
+
+############################
+# 4. Perform PCA
+############################
+
+pca_res <- PCA(
+  pca_input,
+  scale.unit = TRUE,
+  graph = FALSE
+)
+
+
+############################
+# 5. Visualize PCA (PC1 vs PC2)
+############################
+
+fviz_pca_ind(
+  pca_res,
+  axes = c(1, 2),
+  geom.ind = "point",
+  col.ind = metadata$Group,
+  label = "none",
+  addEllipses = TRUE,
+  ellipse.type = "confidence",
+  ellipse.level = 0.95,
+  palette = c("#E7B800", "#FC4E07", "#00AFBB"),
+  pointsize = 3
+) +
+  theme_bw() +
+  labs(title = "PCA of Peptide Expression Data") +
+  theme(
+    legend.title = element_blank(),
+    legend.text  = element_text(size = 12),
+    axis.title   = element_text(size = 14),
+    axis.text    = element_text(size = 12)
+  )
+
