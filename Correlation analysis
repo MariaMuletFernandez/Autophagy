@@ -30,7 +30,7 @@ library(corrplot)
 ############################
 
 data_matrix <- read.csv(
-  "your_path/AD_proteins_C_AD-SZ_codes.csv",
+  "your_path/your_input_file.csv",
   row.names = 1
 )
 
