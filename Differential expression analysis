@@ -1,0 +1,180 @@
+############################################################
+# Differential Expression Analysis: AD vs Control
+# Author: [Your Name]
+#
+# Description:
+# This script performs:
+# 1. Differential expression analysis using limma-voom
+# 2. Volcano plot visualization
+# 3. GO Biological Process enrichment (Top 15 downregulated genes)
+# 4. KEGG pathway visualization using pathview (all downregulated genes)
+#
+# Input:
+#   - Raw count matrix (genes as rows, samples as columns)
+#
+# Output:
+#   - Differential expression table (CSV)
+#   - Volcano plot
+#   - GO enrichment plot (Top 15 BP terms)
+#   - KEGG pathway map (pathview output)
+############################################################
+
+
+############################
+# 1. Load Required Libraries
+############################
+
+library(edgeR)
+library(limma)
+library(ggplot2)
+library(dplyr)
+library(clusterProfiler)
+library(org.Hs.eg.db)
+library(pathview)
+
+
+############################
+# 2. Load Count Data
+############################
+
+counts_data <- read.csv("your_path/filtered_all_data_withSZ.CSV",
+                        row.names = 1)
+
+# Extract experimental groups from column names
+groups <- gsub("[0-9]+$", "", colnames(counts_data))
+groups <- factor(groups, levels = c("C", "AD"))
+
+# Design matrix
+design <- model.matrix(~ 0 + groups)
+colnames(design) <- c("C", "AD")
+
+
+############################
+# 3. Differential Expression (limma-voom)
+############################
+
+# Create DGE object
+dge <- DGEList(counts = counts_data)
+
+# TMM normalization
+dge <- calcNormFactors(dge, method = "TMM")
+
+# Voom transformation
+v <- voom(dge, design)
+
+# Linear model fitting
+fit <- lmFit(v, design)
+
+# Define contrast: AD vs Control
+contrast_matrix <- makeContrasts(ADvC = AD - C, levels = design)
+
+fit2 <- contrasts.fit(fit, contrast_matrix)
+fit2 <- eBayes(fit2)
+
+# Extract full results
+results <- topTable(fit2,
+                    number = Inf,
+                    adjust.method = "BH")
+
+# Save results
+write.csv(results, "DE_results_AD_vs_C.csv")
+
+
+############################
+# 4. Identify Significant Genes
+############################
+
+results$Gene <- rownames(results)
+
+# Significant genes (p < 0.05)
+sig_genes <- results %>%
+  filter(P.Value < 0.05)
+
+# Split up- and downregulated
+up_genes   <- sig_genes %>% filter(ADvC > 0)
+down_genes <- sig_genes %>% filter(ADvC < 0)
+
+
+############################
+# 5. Volcano Plot
+############################
+
+results$Regulation <- ifelse(results$P.Value < 0.05 & abs(results$ADvC) >= 1,
+                             ifelse(results$ADvC > 1, "Up", "Down"),
+                             "Not significant")
+
+volcano_plot <- ggplot(results,
+                       aes(x = ADvC,
+                           y = -log10(P.Value),
+                           color = Regulation)) +
+  geom_point(alpha = 0.6, size = 2) +
+  geom_vline(xintercept = c(-1, 1), linetype = "dashed") +
+  geom_hline(yintercept = -log10(0.05), linetype = "dashed") +
+  scale_color_manual(values = c("Up" = "darkslategray3",
+                                "Down" = "coral",
+                                "Not significant" = "grey")) +
+  labs(title = "Differential Expression: AD vs Control",
+       x = "log2 Fold Change",
+       y = "-log10(p-value)") +
+  theme_bw()
+
+print(volcano_plot)
+
+
+############################
+# 6. GO Enrichment (Top 15 Downregulated Genes)
+############################
+
+# Select top 15 most downregulated genes (by logFC)
+top15_down <- down_genes %>%
+  arrange(ADvC) %>%
+  head(15)
+
+ego_down <- enrichGO(
+  gene          = top15_down$Gene,
+  keyType       = "SYMBOL",
+  OrgDb         = org.Hs.eg.db,
+  ont           = "BP",
+  pAdjustMethod = "BH",
+  pvalueCutoff  = 0.05,
+  qvalueCutoff  = 0.05,
+  readable      = TRUE
+)
+
+# Plot GO results
+barplot(ego_down, showCategory = 15)
+
+
+############################
+# 7. KEGG Pathway Visualization (All Downregulated)
+############################
+
+# Convert SYMBOL → ENTREZ
+ids_down <- bitr(down_genes$Gene,
+                 fromType = "SYMBOL",
+                 toType   = "ENTREZID",
+                 OrgDb    = org.Hs.eg.db)
+
+# Remove duplicates
+ids_down <- ids_down[!duplicated(ids_down$SYMBOL), ]
+
+# Merge with logFC
+down_merge <- merge(down_genes,
+                    ids_down,
+                    by.x = "Gene",
+                    by.y = "SYMBOL")
+
+# Create named vector for pathview
+geneList <- down_merge$ADvC
+names(geneList) <- down_merge$ENTREZID
+
+geneList <- geneList[!is.na(names(geneList))]
+
+# Example KEGG pathway (Autophagy pathway: hsa04140)
+pathview(
+  gene.data  = geneList,
+  pathway.id = "hsa04140",
+  species    = "hsa",
+  out.suffix = "AD_downregulated"
+)
+
