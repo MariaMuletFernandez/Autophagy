@@ -1,0 +1,93 @@
+############################################################
+# Correlation Analysis Between Samples
+# Author: Maria Mulet Fernandez
+#
+# Description:
+# This script:
+# 1. Loads a numeric dataset
+# 2. Computes pairwise Pearson correlations
+# 3. Calculates p-values for correlation significance
+# 4. Visualizes the correlation matrix using corrplot
+#
+# Input:
+#   - CSV file with numeric expression values
+#     (features as rows, samples as columns)
+#
+# Output:
+#   - Correlation heatmap with hierarchical clustering
+############################################################
+
+
+############################
+# 1. Load Required Library
+############################
+
+library(corrplot)
+
+
+############################
+# 2. Load Data
+############################
+
+data_matrix <- read.csv(
+  "your_path/AD_proteins_C_AD-SZ_codes.csv",
+  row.names = 1
+)
+
+# Transpose matrix if correlations should be computed between columns
+# (i.e., between samples instead of features)
+data_matrix_t <- t(data_matrix)
+
+
+############################
+# 3. Compute Correlation Matrix
+############################
+
+# Pearson correlation
+cor_matrix <- cor(data_matrix_t, method = "pearson")
+
+
+############################
+# 4. Compute P-values for Correlations
+############################
+
+# Function to compute p-value matrix
+cor_mtest <- function(mat, conf.level = 0.95) {
+  
+  mat <- as.matrix(mat)
+  n <- ncol(mat)
+  
+  p.mat <- matrix(NA, n, n)
+  diag(p.mat) <- 0
+  
+  for (i in 1:(n - 1)) {
+    for (j in (i + 1):n) {
+      test <- cor.test(mat[, i], mat[, j],
+                       conf.level = conf.level)
+      p.mat[i, j] <- p.mat[j, i] <- test$p.value
+    }
+  }
+  
+  colnames(p.mat) <- rownames(p.mat) <- colnames(mat)
+  return(p.mat)
+}
+
+p_matrix <- cor_mtest(data_matrix_t)
+
+
+############################
+# 5. Correlation Plot
+############################
+
+corrplot(
+  cor_matrix,
+  method      = "color",
+  order       = "hclust",
+  addrect     = 2,
+  p.mat       = p_matrix,
+  insig       = "label_sig",
+  sig.level   = c(0.001, 0.01, 0.05),
+  tl.col      = "black",
+  tl.cex      = 0.8
+)
+
