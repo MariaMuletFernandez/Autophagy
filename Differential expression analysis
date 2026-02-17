@@ -37,7 +37,7 @@ library(pathview)
 # 2. Load Count Data
 ############################
 
-counts_data <- read.csv("your_path/filtered_all_data_withSZ.CSV",
+counts_data <- read.csv("your_path/your_input_file.csv",
                         row.names = 1)
 
 # Extract experimental groups from column names
@@ -77,7 +77,7 @@ results <- topTable(fit2,
                     adjust.method = "BH")
 
 # Save results
-write.csv(results, "DE_results_AD_vs_C.csv")
+write.csv(results, "reults_file.csv")
 
 
 ############################
